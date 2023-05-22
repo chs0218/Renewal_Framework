@@ -1,6 +1,8 @@
 #include "Win32Application.h"
 #include "DirectXProgram.h"
 
+HWND Win32Application::m_hwnd = nullptr;
+
 LRESULT Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -49,14 +51,14 @@ int Win32Application::Run(DirectXProgram* d3dProgram, HINSTANCE hInstance, int n
 	AdjustWindowRect(&rc, dwStyle, FALSE);
 
 	// 윈도우 생성
-	HWND hMainWnd = CreateWindow(TEXT("Basic_Window_Class"), d3dProgram->GetProgramTitle().c_str(), dwStyle, FIRST_WINDOW_POS_WIDTH, FIRST_WINDOW_POS_HEIGHT,
+	m_hwnd = CreateWindow(TEXT("Basic_Window_Class"), d3dProgram->GetProgramTitle().c_str(), dwStyle, FIRST_WINDOW_POS_WIDTH, FIRST_WINDOW_POS_HEIGHT,
 		rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance, NULL);
 
 	d3dProgram->Init();
 
 	// 윈도우 출력
-	ShowWindow(hMainWnd, nCmdShow);
-	UpdateWindow(hMainWnd);
+	ShowWindow(m_hwnd, nCmdShow);
+	UpdateWindow(m_hwnd);
 
 
 	// 이벤트 처리

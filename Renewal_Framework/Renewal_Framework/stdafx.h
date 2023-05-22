@@ -23,6 +23,9 @@
 
 using Microsoft::WRL::ComPtr;
 
+extern UINT	gnCbvSrvDescriptorIncrementSize;
+extern UINT gnRtvDescriptorIncrementSize;
+
 inline std::string HrToString(HRESULT hr)
 {
     char s_str[64] = {};
