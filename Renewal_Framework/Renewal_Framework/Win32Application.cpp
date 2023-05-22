@@ -52,6 +52,8 @@ int Win32Application::Run(DirectXProgram* d3dProgram, HINSTANCE hInstance, int n
 	HWND hMainWnd = CreateWindow(TEXT("Basic_Window_Class"), d3dProgram->GetProgramTitle().c_str(), dwStyle, FIRST_WINDOW_POS_WIDTH, FIRST_WINDOW_POS_HEIGHT,
 		rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance, NULL);
 
+	d3dProgram->Init();
+
 	// 윈도우 출력
 	ShowWindow(hMainWnd, nCmdShow);
 	UpdateWindow(hMainWnd);
