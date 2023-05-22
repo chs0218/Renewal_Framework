@@ -7,3 +7,5 @@
 #define FRAME_BUFFER_HEIGHT 1080
 
 #include <windows.h>
+#include <d3d12.h>
+#include <string>
