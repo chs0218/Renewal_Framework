@@ -1,4 +1,9 @@
 #pragma once
+#pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "dxguid.lib")
 
 #define FIRST_WINDOW_POS_WIDTH 0
 #define FIRST_WINDOW_POS_HEIGHT 0
@@ -6,13 +11,10 @@
 #define FRAME_BUFFER_WIDTH 1920
 #define FRAME_BUFFER_HEIGHT 1080
 
+#define HALF_FRAME_BUFFER_WIDTH 960
+#define HALF_FRAME_BUFFER_HEIGHT 540
+
 #include <windows.h>
-#pragma once
-#pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "d3d12.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "dxguid.lib")
 
 #include <stdexcept>
 #include <string>
@@ -21,10 +23,16 @@
 #include <dxgi1_4.h>
 #include <wrl.h>
 
+#include <DirectXMath.h>
+#include <d3dcompiler.h>
+
 using Microsoft::WRL::ComPtr;
 
 extern UINT	gnCbvSrvDescriptorIncrementSize;
 extern UINT gnRtvDescriptorIncrementSize;
+
+extern ComPtr<ID3D12Resource> CreateBufferResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, void* pData, UINT nBytes, D3D12_HEAP_TYPE d3dHeapType, D3D12_RESOURCE_STATES d3dResourceStates, ID3D12Resource** ppd3dUploadBuffer);
+extern void SynchronizeResourceTransition(ID3D12GraphicsCommandList* pd3dCommandList, ID3D12Resource* pd3dResource, D3D12_RESOURCE_STATES d3dStateBefore, D3D12_RESOURCE_STATES d3dStateAfter);
 
 inline std::string HrToString(HRESULT hr)
 {

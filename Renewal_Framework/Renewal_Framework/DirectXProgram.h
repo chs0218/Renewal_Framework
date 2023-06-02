@@ -1,6 +1,12 @@
 #pragma once
 #include "stdafx.h"
 
+struct Vertex
+{
+	DirectX::XMFLOAT3 position;
+	DirectX::XMFLOAT4 color;
+};
+
 class DirectXProgram
 {
 private:
@@ -8,6 +14,13 @@ private:
 	UINT m_ProgramWidth;
 	UINT m_ProgramHeight;
 	std::wstring m_ProgramTitle;
+
+	// 뷰포트와 시저 사각형을 정의
+	D3D12_VIEWPORT m_Viewport;
+	D3D12_RECT m_ScissorRect;
+
+	// 윈도우 종횡비를 계산해 저장하고 있는 변수이다.
+	float m_AspectRatio;
 
 	// 사용자 화면 해상도를 저장하는 변수이다.
 	RECT m_DeskTopCoordinatesRect;
@@ -45,6 +58,18 @@ private:
 	ComPtr<ID3D12Resource> m_pd3dDepthStencilBuffer;
 	ComPtr<ID3D12DescriptorHeap> m_pd3dDsvDescriptorHeap;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_d3dDsvDescriptorCPUHandle;
+
+	// 그래픽스파이프라인 상태를 정의
+	ComPtr<ID3D12PipelineState> m_pd3dPipelineState;
+
+	// 루트 시그니쳐를 정의
+	ComPtr<ID3D12RootSignature> m_RootSignature;
+
+	// 삼각형을 그리기 위한 포지션, 색상 정보를 저장하는 버퍼이다.
+	ComPtr<ID3D12Resource> m_pd3dPosColBuffer = NULL;
+	ComPtr<ID3D12Resource> m_pd3dPosColUploadBuffer = NULL;
+
+	D3D12_VERTEX_BUFFER_VIEW m_pd3dVertexBufferView;
 public:
 	DirectXProgram(UINT width, UINT height, std::wstring title);
 
@@ -53,6 +78,8 @@ public:
 	const std::wstring& GetProgramTitle() { return m_ProgramTitle; }
 
 	void Init();
+	void BuildLevel();
+	void RenderLevel();
 	void WaitForGpuComplete();
 };
 

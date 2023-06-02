@@ -5,8 +5,16 @@ HWND Win32Application::m_Hwnd = nullptr;
 
 LRESULT Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	DirectXProgram* pSampleProgram = reinterpret_cast<DirectXProgram*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+
 	switch (message)
 	{
+	case WM_CREATE:
+		{
+			LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
+			SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
+		}
+		break;
 	case WM_ACTIVATE:
 	case WM_SIZE:
 	case WM_LBUTTONDOWN:
@@ -16,6 +24,11 @@ LRESULT Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_MOUSEMOVE:
 	case WM_KEYDOWN:
 	case WM_KEYUP:
+		break;
+	case WM_PAINT:
+		if (pSampleProgram)
+			pSampleProgram->RenderLevel();
+		//OutputDebugString(L"Paint\n");
 		break;
 	case WM_DESTROY:
 		::PostQuitMessage(0);
@@ -61,14 +74,13 @@ int Win32Application::Run(DirectXProgram* d3dProgram, HINSTANCE hInstance, int n
 		NULL, 
 		NULL, 
 		hInstance, 
-		NULL);
+		d3dProgram);
 
 	d3dProgram->Init();
 
 	// 윈도우 출력
 	ShowWindow(m_Hwnd, nCmdShow);
 	UpdateWindow(m_Hwnd);
-
 
 	// 이벤트 처리
 	MSG Message;
