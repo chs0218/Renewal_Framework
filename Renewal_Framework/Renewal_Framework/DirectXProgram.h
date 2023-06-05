@@ -78,6 +78,16 @@ public:
 	const std::wstring& GetProgramTitle() { return m_ProgramTitle; }
 
 	void Init();
+	
+	void CreateDirectXDevice(IDXGIFactory4*);
+	void CheckMsaa4xLevels();
+	void CreateFence();
+	void CreateCommandQueueAndList();
+	void CreateDescriptorHeaps();
+	void CreateSwapChain(IDXGIFactory4*);
+	void CreateRenderTargetViews();
+	void CreateDepthStencilView();
+
 	void BuildLevel();
 	void RenderLevel();
 	void WaitForGpuComplete();

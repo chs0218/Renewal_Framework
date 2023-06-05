@@ -11,7 +11,6 @@ DirectXProgram::DirectXProgram(UINT width, UINT height, std::wstring title)
 	m_Viewport = { 0, 0, static_cast<float>(m_ProgramWidth) ,  static_cast<float>(m_ProgramHeight), 0.0f, 1.0f };
 	m_ScissorRect = { 0, 0, static_cast<LONG>(m_ProgramWidth) ,  static_cast<LONG>(m_ProgramHeight) };
 }
-
 void DirectXProgram::Init()
 {
 	UINT dxgiFactoryFlags = 0;
@@ -32,12 +31,24 @@ void DirectXProgram::Init()
 	ComPtr<IDXGIFactory4> pdxgiFactory;
 	ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pdxgiFactory)));
 
+	CreateDirectXDevice(pdxgiFactory.Get());
+	CheckMsaa4xLevels();
+	CreateFence();
+	CreateCommandQueueAndList();
+	CreateDescriptorHeaps();
+	CreateSwapChain(pdxgiFactory.Get());
+	CreateRenderTargetViews();
+	CreateDepthStencilView();
 
+	BuildLevel();
+}
+void DirectXProgram::CreateDirectXDevice(IDXGIFactory4* pdxgiFactory)
+{
 	// 사용 가능한 디스플레이 어답터(그래픽카드)가 있는지 확인하고 
 	// 있다면 해당 어답터로 Direct3D Device 인터페이스 객체를 생성한다.
 	ComPtr<IDXGIAdapter1> pd3dAdapter = NULL;
-	for (UINT i = 0; 
-		DXGI_ERROR_NOT_FOUND != pdxgiFactory->EnumAdapters1(i, pd3dAdapter.GetAddressOf()); 
+	for (UINT i = 0;
+		DXGI_ERROR_NOT_FOUND != pdxgiFactory->EnumAdapters1(i, pd3dAdapter.GetAddressOf());
 		i++)
 	{
 		ComPtr<IDXGIOutput> pd3dOutput = NULL;
@@ -55,9 +66,9 @@ void DirectXProgram::Init()
 			continue;
 
 		if (SUCCEEDED(D3D12CreateDevice(
-			pd3dAdapter.Get(), 
-			D3D_FEATURE_LEVEL_12_0, 
-			_uuidof(ID3D12Device), 
+			pd3dAdapter.Get(),
+			D3D_FEATURE_LEVEL_12_0,
+			_uuidof(ID3D12Device),
 			(void**)m_pd3dDevice.GetAddressOf())))
 			break;
 	}
@@ -68,16 +79,25 @@ void DirectXProgram::Init()
 	if (!m_pd3dDevice)
 	{
 		pdxgiFactory->EnumWarpAdapter(
-			_uuidof(IDXGIAdapter1), 
+			_uuidof(IDXGIAdapter1),
 			(void**)pd3dAdapter.GetAddressOf());
 
 		D3D12CreateDevice(
-			pd3dAdapter.Get(), 
-			D3D_FEATURE_LEVEL_11_0, 
-			_uuidof(ID3D12Device), 
+			pd3dAdapter.Get(),
+			D3D_FEATURE_LEVEL_11_0,
+			_uuidof(ID3D12Device),
 			(void**)m_pd3dDevice.GetAddressOf());
 	}
 
+	// 디바이스를 생성한뒤 디스크립터핸들의 증가 크기를 설정해준다.
+	gnRtvDescriptorIncrementSize =
+		m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	gnCbvSrvDescriptorIncrementSize =
+		m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+}
+void DirectXProgram::CheckMsaa4xLevels()
+{
 	//디바이스가 지원하는 다중 샘플의 품질 수준을 확인한다. 
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
 	d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -85,20 +105,22 @@ void DirectXProgram::Init()
 	d3dMsaaQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	d3dMsaaQualityLevels.NumQualityLevels = 0;
 	m_pd3dDevice->CheckFeatureSupport(
-		D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, 
-		&d3dMsaaQualityLevels, 
+		D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+		&d3dMsaaQualityLevels,
 		sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS));
 
 	m_nMsaa4xQualityLevels = d3dMsaaQualityLevels.NumQualityLevels;
 
 	//다중 샘플의 품질 수준이 1보다 크면 다중 샘플링을 활성화한다. 
 	m_bMsaa4xEnable = (m_nMsaa4xQualityLevels > 1) ? true : false;
-
+}
+void DirectXProgram::CreateFence()
+{
 	//펜스를 생성하고 펜스 값을 0으로 설정한다. 
 	ThrowIfFailed(m_pd3dDevice->CreateFence(
-		0, 
+		0,
 		D3D12_FENCE_FLAG_NONE,
-		__uuidof(ID3D12Fence), 
+		__uuidof(ID3D12Fence),
 		(void**)m_pd3dFence.GetAddressOf()));
 
 	for (UINT i = 0; i < m_nSwapChainBuffers; i++) m_nFenceValues[i] = 1;
@@ -108,14 +130,9 @@ void DirectXProgram::Init()
 	m_hFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 	if (m_hFenceEvent == nullptr)
 		ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
-
-	::gnRtvDescriptorIncrementSize = 
-		m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-	::gnCbvSrvDescriptorIncrementSize = 
-		m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-
+}
+void DirectXProgram::CreateCommandQueueAndList()
+{
 	// 명령 큐를 서술하고 생성한다.
 	D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
 	ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
@@ -123,28 +140,30 @@ void DirectXProgram::Init()
 	d3dCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
 	ThrowIfFailed(m_pd3dDevice->CreateCommandQueue(
-		&d3dCommandQueueDesc, 
+		&d3dCommandQueueDesc,
 		_uuidof(ID3D12CommandQueue),
 		(void**)m_pd3dCommandQueue.GetAddressOf()));
 
 	// 명령 할당자를 생성한다.
 	ThrowIfFailed(m_pd3dDevice->CreateCommandAllocator(
-		D3D12_COMMAND_LIST_TYPE_DIRECT, 
-		__uuidof(ID3D12CommandAllocator), 
+		D3D12_COMMAND_LIST_TYPE_DIRECT,
+		__uuidof(ID3D12CommandAllocator),
 		(void**)m_pd3dCommandAllocator.GetAddressOf()));
 
 	//명령 리스트를 생성한다.
 	ThrowIfFailed(m_pd3dDevice->CreateCommandList(
-		0, 
-		D3D12_COMMAND_LIST_TYPE_DIRECT, 
-		m_pd3dCommandAllocator.Get(), 
-		NULL, 
-		__uuidof(ID3D12GraphicsCommandList), 
+		0,
+		D3D12_COMMAND_LIST_TYPE_DIRECT,
+		m_pd3dCommandAllocator.Get(),
+		NULL,
+		__uuidof(ID3D12GraphicsCommandList),
 		(void**)m_pd3dCommandList.GetAddressOf()));
-	
+
 	//명령 리스트는 생성되면 열린(Open) 상태이므로 닫힌(Closed) 상태로 만든다.
 	m_pd3dCommandList->Close();
-
+}
+void DirectXProgram::CreateDescriptorHeaps()
+{
 	// 렌더 타겟 서술자 힙을 생성한다.
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
 	ZeroMemory(&d3dDescriptorHeapDesc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
@@ -154,18 +173,20 @@ void DirectXProgram::Init()
 	d3dDescriptorHeapDesc.NodeMask = 0;
 
 	ThrowIfFailed(m_pd3dDevice->CreateDescriptorHeap(
-		&d3dDescriptorHeapDesc, 
-		__uuidof(ID3D12DescriptorHeap), 
+		&d3dDescriptorHeapDesc,
+		__uuidof(ID3D12DescriptorHeap),
 		(void**)m_pd3dRtvDescriptorHeap.GetAddressOf()));
 
 	// 깊이-스텐실 서술자 힙을 생성한다.
 	d3dDescriptorHeapDesc.NumDescriptors = 1;
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 	ThrowIfFailed(m_pd3dDevice->CreateDescriptorHeap(
-		&d3dDescriptorHeapDesc, 
-		__uuidof(ID3D12DescriptorHeap), 
+		&d3dDescriptorHeapDesc,
+		__uuidof(ID3D12DescriptorHeap),
 		(void**)m_pd3dDsvDescriptorHeap.GetAddressOf()));
-
+}
+void DirectXProgram::CreateSwapChain(IDXGIFactory4* pdxgiFactory)
+{
 	// 스왑 체인을 생성한다. DXGI 버전 1.2에서 도입된 DXGI_SWAP_CHAIN_DESC1를 사용했다.
 	DXGI_SWAP_CHAIN_DESC1 dxgiSwapChainDesc;
 	ZeroMemory(&dxgiSwapChainDesc, sizeof(dxgiSwapChainDesc));
@@ -181,19 +202,21 @@ void DirectXProgram::Init()
 	dxgiSwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
 	ThrowIfFailed(pdxgiFactory->CreateSwapChainForHwnd(
-		m_pd3dCommandQueue.Get(), 
-		Win32Application::GetHwnd(), 
-		&dxgiSwapChainDesc, 
+		m_pd3dCommandQueue.Get(),
+		Win32Application::GetHwnd(),
+		&dxgiSwapChainDesc,
 		nullptr,
-		nullptr, 
+		nullptr,
 		(IDXGISwapChain1**)m_pdxgiSwapChain.GetAddressOf()));
 
 	ThrowIfFailed(pdxgiFactory->MakeWindowAssociation(
-		Win32Application::GetHwnd(), 
+		Win32Application::GetHwnd(),
 		DXGI_MWA_NO_ALT_ENTER));
 
 	m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
-
+}
+void DirectXProgram::CreateRenderTargetViews()
+{
 	//스왑체인의 후면 버퍼에 대한 렌더 타겟 뷰를 생성한다. 
 	D3D12_RENDER_TARGET_VIEW_DESC d3dRenderTargetViewDesc;
 	d3dRenderTargetViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -201,25 +224,27 @@ void DirectXProgram::Init()
 	d3dRenderTargetViewDesc.Texture2D.MipSlice = 0;
 	d3dRenderTargetViewDesc.Texture2D.PlaneSlice = 0;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = 
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle =
 		m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
 	for (UINT i = 0; i < m_nSwapChainBuffers; i++)
 	{
 		m_pdxgiSwapChain->GetBuffer(
-			i, 
-			__uuidof(ID3D12Resource), 
+			i,
+			__uuidof(ID3D12Resource),
 			(void**)m_ppd3dRenderTargetBuffers[i].GetAddressOf());
 
 		m_pd3dDevice->CreateRenderTargetView(
-			m_ppd3dRenderTargetBuffers[i].Get(), 
-			&d3dRenderTargetViewDesc, 
+			m_ppd3dRenderTargetBuffers[i].Get(),
+			&d3dRenderTargetViewDesc,
 			d3dRtvCPUDescriptorHandle);
 
 		m_pd3dSwapRTVCPUHandles[i] = d3dRtvCPUDescriptorHandle;
 		d3dRtvCPUDescriptorHandle.ptr += ::gnRtvDescriptorIncrementSize;
 	}
-
+}
+void DirectXProgram::CreateDepthStencilView()
+{
 	//깊이-스텐실 버퍼를 생성한다. 
 	D3D12_RESOURCE_DESC d3dResourceDesc;
 	d3dResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -230,7 +255,7 @@ void DirectXProgram::Init()
 	d3dResourceDesc.MipLevels = 1;
 	d3dResourceDesc.Format = DXGI_FORMAT_D32_FLOAT;
 	d3dResourceDesc.SampleDesc.Count = (m_bMsaa4xEnable) ? 4 : 1;
-	d3dResourceDesc.SampleDesc.Quality = 
+	d3dResourceDesc.SampleDesc.Quality =
 		(m_bMsaa4xEnable) ? (m_nMsaa4xQualityLevels - 1) : 0;
 	d3dResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	d3dResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -249,25 +274,22 @@ void DirectXProgram::Init()
 	d3dClearValue.DepthStencil.Stencil = 0;
 
 	ThrowIfFailed(m_pd3dDevice->CreateCommittedResource(
-		&d3dHeapProperties, 
-		D3D12_HEAP_FLAG_NONE, 
-		&d3dResourceDesc, 
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, 
-		&d3dClearValue, 
-		__uuidof(ID3D12Resource), 
+		&d3dHeapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&d3dResourceDesc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		&d3dClearValue,
+		__uuidof(ID3D12Resource),
 		(void**)m_pd3dDepthStencilBuffer.GetAddressOf()));
 
 
 	//깊이-스텐실 버퍼 뷰를 생성한다. 
 	m_d3dDsvDescriptorCPUHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_pd3dDevice->CreateDepthStencilView(
-		m_pd3dDepthStencilBuffer.Get(), 
-		NULL, 
+		m_pd3dDepthStencilBuffer.Get(),
+		NULL,
 		m_d3dDsvDescriptorCPUHandle);
-
-	BuildLevel();
 }
-
 void DirectXProgram::BuildLevel()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL);
@@ -351,68 +373,34 @@ void DirectXProgram::BuildLevel()
 		if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
 		if (pd3dErrorBlob) pd3dErrorBlob->Release();
 
-		// 컴파일한 버텍스 쉐이더 정보를 저장
-		D3D12_SHADER_BYTECODE d3dVertexShaderByteCode;
-		d3dVertexShaderByteCode.BytecodeLength = vertexShader->GetBufferSize();
-		d3dVertexShaderByteCode.pShaderBytecode = vertexShader->GetBufferPointer();
-
-		// 컴파일한 픽셀 쉐이더 정보를 저장
-		D3D12_SHADER_BYTECODE d3dPixelShaderByteCode;
-		d3dPixelShaderByteCode.BytecodeLength = pixelShader->GetBufferSize();
-		d3dPixelShaderByteCode.pShaderBytecode = pixelShader->GetBufferPointer();
-
-		// 래스터라이저 정의
-		D3D12_RASTERIZER_DESC d3dRasterizerDesc;
-		::ZeroMemory(&d3dRasterizerDesc, sizeof(D3D12_RASTERIZER_DESC));
-		d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-		d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-		d3dRasterizerDesc.FrontCounterClockwise = FALSE;
-		d3dRasterizerDesc.DepthBias = 0;
-		d3dRasterizerDesc.DepthBiasClamp = 0.0f;
-		d3dRasterizerDesc.SlopeScaledDepthBias = 0.0f;
-		d3dRasterizerDesc.DepthClipEnable = TRUE;
-		d3dRasterizerDesc.MultisampleEnable = FALSE;
-		d3dRasterizerDesc.AntialiasedLineEnable = FALSE;
-		d3dRasterizerDesc.ForcedSampleCount = 0;
-		d3dRasterizerDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-		// 블렌드 스테이트 정의
-		D3D12_BLEND_DESC d3dBlendDesc;
-		::ZeroMemory(&d3dBlendDesc, sizeof(D3D12_BLEND_DESC));
-		d3dBlendDesc.AlphaToCoverageEnable = FALSE;		
-		d3dBlendDesc.IndependentBlendEnable = FALSE;		
-		d3dBlendDesc.RenderTarget[0].BlendEnable = FALSE;		
-		d3dBlendDesc.RenderTarget[0].LogicOpEnable = FALSE;			
-		d3dBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;		
-		d3dBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;		
-		d3dBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;		
-		d3dBlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;	
-		d3dBlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;	
-		d3dBlendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;	
-		d3dBlendDesc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;		
-		d3dBlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
 		// 그래픽스 파이프라인 상태를 정의
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_RootSignature.Get();
-		psoDesc.VS = d3dVertexShaderByteCode;
-		psoDesc.PS = d3dPixelShaderByteCode;
-		psoDesc.RasterizerState = d3dRasterizerDesc;
-		psoDesc.BlendState = d3dBlendDesc;
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psoDesc.SampleDesc.Count = 1;
+		{
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+			psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+			psoDesc.pRootSignature = m_RootSignature.Get();
 
-		// 파이프라인 스테이트를 생성
-		ThrowIfFailed(m_pd3dDevice->CreateGraphicsPipelineState(
-			&psoDesc, 
-			__uuidof(ID3D12PipelineState), 
-			(void**)m_pd3dPipelineState.GetAddressOf()));
+			// 버텍스 쉐이더와 픽셀 쉐이더를 CD3DX12_SHADER_BYTECODE를 이용해 설정
+			psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+			psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+
+			// 래스터라이저와 블렌딩을 d3dx12.h 에서 제공하는 기본 상태로 설정
+			psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+			psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+
+			psoDesc.DepthStencilState.DepthEnable = FALSE;
+			psoDesc.DepthStencilState.StencilEnable = FALSE;
+			psoDesc.SampleMask = UINT_MAX;
+			psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+			psoDesc.NumRenderTargets = 1;
+			psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+			psoDesc.SampleDesc.Count = 1;
+
+			// 파이프라인 스테이트를 생성
+			ThrowIfFailed(m_pd3dDevice->CreateGraphicsPipelineState(
+				&psoDesc,
+				__uuidof(ID3D12PipelineState),
+				(void**)m_pd3dPipelineState.GetAddressOf()));
+		}
 	}
 
 
@@ -451,7 +439,6 @@ void DirectXProgram::BuildLevel()
 	// 명령리스트에 담긴 명령들이 모두 동작할 때까지 기다린다.
 	WaitForGpuComplete();
 }
-
 void DirectXProgram::RenderLevel()	
 {
 	// 명령할당자를 초기화한다.
@@ -527,7 +514,6 @@ void DirectXProgram::RenderLevel()
 	// Present가 완료되는 것을 기다린다.
 	WaitForGpuComplete();
 }
-
 void DirectXProgram::WaitForGpuComplete()
 {
 	UINT64 nFenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];

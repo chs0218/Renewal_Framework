@@ -28,7 +28,6 @@ LRESULT Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_PAINT:
 		if (pSampleProgram)
 			pSampleProgram->RenderLevel();
-		//OutputDebugString(L"Paint\n");
 		break;
 	case WM_DESTROY:
 		::PostQuitMessage(0);
