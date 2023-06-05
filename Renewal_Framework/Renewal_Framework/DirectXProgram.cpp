@@ -351,15 +351,17 @@ void DirectXProgram::BuildLevel()
 		if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
 		if (pd3dErrorBlob) pd3dErrorBlob->Release();
 
-		// 그래픽스 파이프라인을 정의
+		// 컴파일한 버텍스 쉐이더 정보를 저장
 		D3D12_SHADER_BYTECODE d3dVertexShaderByteCode;
 		d3dVertexShaderByteCode.BytecodeLength = vertexShader->GetBufferSize();
 		d3dVertexShaderByteCode.pShaderBytecode = vertexShader->GetBufferPointer();
 
+		// 컴파일한 픽셀 쉐이더 정보를 저장
 		D3D12_SHADER_BYTECODE d3dPixelShaderByteCode;
 		d3dPixelShaderByteCode.BytecodeLength = pixelShader->GetBufferSize();
 		d3dPixelShaderByteCode.pShaderBytecode = pixelShader->GetBufferPointer();
 
+		// 래스터라이저 정의
 		D3D12_RASTERIZER_DESC d3dRasterizerDesc;
 		::ZeroMemory(&d3dRasterizerDesc, sizeof(D3D12_RASTERIZER_DESC));
 		d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
@@ -374,6 +376,7 @@ void DirectXProgram::BuildLevel()
 		d3dRasterizerDesc.ForcedSampleCount = 0;
 		d3dRasterizerDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
+		// 블렌드 스테이트 정의
 		D3D12_BLEND_DESC d3dBlendDesc;
 		::ZeroMemory(&d3dBlendDesc, sizeof(D3D12_BLEND_DESC));
 		d3dBlendDesc.AlphaToCoverageEnable = FALSE;		
@@ -389,7 +392,7 @@ void DirectXProgram::BuildLevel()
 		d3dBlendDesc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;		
 		d3dBlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-		// 파이프라인 스테이트를 생성
+		// 그래픽스 파이프라인 상태를 정의
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 		psoDesc.pRootSignature = m_RootSignature.Get();
@@ -405,6 +408,7 @@ void DirectXProgram::BuildLevel()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 
+		// 파이프라인 스테이트를 생성
 		ThrowIfFailed(m_pd3dDevice->CreateGraphicsPipelineState(
 			&psoDesc, 
 			__uuidof(ID3D12PipelineState), 
