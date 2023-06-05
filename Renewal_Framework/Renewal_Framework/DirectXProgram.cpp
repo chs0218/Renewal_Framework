@@ -281,14 +281,36 @@ void DirectXProgram::BuildLevel()
 		UINT compileFlags = 0;
 #endif
 		// 버텍스 쉐이더, 픽셀 쉐이더를 컴파일
-		ThrowIfFailed(D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-		ThrowIfFailed(D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(
+			L"shaders.hlsl", 
+			nullptr, 
+			nullptr, 
+			"VSMain", 
+			"vs_5_0", 
+			compileFlags, 
+			0, 
+			&vertexShader, 
+			nullptr));
+
+		ThrowIfFailed(D3DCompileFromFile(
+			L"shaders.hlsl", 
+			nullptr, 
+			nullptr, 
+			"PSMain", 
+			"ps_5_0", 
+			compileFlags, 
+			0, 
+			&pixelShader, 
+			nullptr));
 
 		// 입력 레이아웃을 정의
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, 
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+
+			{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12,
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
 
@@ -296,7 +318,11 @@ void DirectXProgram::BuildLevel()
 		D3D12_ROOT_PARAMETER pd3dRootParameters;
 		D3D12_STATIC_SAMPLER_DESC d3dSamplerDesc;
 
-		D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_ALLOW_STREAM_OUTPUT | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+		D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags = 
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | 
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_STREAM_OUTPUT | 
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS | 
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
 
 		D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
 		::ZeroMemory(&d3dRootSignatureDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
@@ -309,8 +335,18 @@ void DirectXProgram::BuildLevel()
 		ID3DBlob* pd3dSignatureBlob = nullptr;
 		ID3DBlob* pd3dErrorBlob = nullptr;
 
-		HRESULT hResult = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &pd3dSignatureBlob, &pd3dErrorBlob);
-		hResult = m_pd3dDevice->CreateRootSignature(0, pd3dSignatureBlob->GetBufferPointer(), pd3dSignatureBlob->GetBufferSize(), __uuidof(ID3D12RootSignature), (void**)&m_RootSignature);
+		ThrowIfFailed(D3D12SerializeRootSignature(
+			&d3dRootSignatureDesc, 
+			D3D_ROOT_SIGNATURE_VERSION_1, 
+			&pd3dSignatureBlob, 
+			&pd3dErrorBlob));
+
+		ThrowIfFailed(m_pd3dDevice->CreateRootSignature(
+			0, 
+			pd3dSignatureBlob->GetBufferPointer(), 
+			pd3dSignatureBlob->GetBufferSize(), 
+			__uuidof(ID3D12RootSignature), 
+			(void**)&m_RootSignature));
 
 		if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
 		if (pd3dErrorBlob) pd3dErrorBlob->Release();
@@ -340,18 +376,18 @@ void DirectXProgram::BuildLevel()
 
 		D3D12_BLEND_DESC d3dBlendDesc;
 		::ZeroMemory(&d3dBlendDesc, sizeof(D3D12_BLEND_DESC));
-		d3dBlendDesc.AlphaToCoverageEnable = FALSE;		// 다중 샘플링을 위해 렌더 타겟 0의 알파 값을 커버리지 마스크로 변환
-		d3dBlendDesc.IndependentBlendEnable = FALSE;		// 각 렌더 타겟에서 독립적인 블렌딩을 수행 여부
-		d3dBlendDesc.RenderTarget[0].BlendEnable = FALSE;		// 블렌딩을 활성화
-		d3dBlendDesc.RenderTarget[0].LogicOpEnable = FALSE;			// 논리 연산을 활성화
-		d3dBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;		// 픽셀 색상에 곱하는 값(요소별 연산)
-		d3dBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;			// 렌더 타겟 색상에 곱하는 값
-		d3dBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;			// RGB색상 블렌드 연산자
-		d3dBlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;		// 알파값에 대한 블렌드
-		d3dBlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;		// 알파값에 대한 블렌드
-		d3dBlendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;		// 알파값에 대한 블렌드
-		d3dBlendDesc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;		// 논리 연산자
-		d3dBlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;	// 블렌드 타겟에 적용할 마스크
+		d3dBlendDesc.AlphaToCoverageEnable = FALSE;		
+		d3dBlendDesc.IndependentBlendEnable = FALSE;		
+		d3dBlendDesc.RenderTarget[0].BlendEnable = FALSE;		
+		d3dBlendDesc.RenderTarget[0].LogicOpEnable = FALSE;			
+		d3dBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;		
+		d3dBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;		
+		d3dBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;		
+		d3dBlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;	
+		d3dBlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;	
+		d3dBlendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;	
+		d3dBlendDesc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;		
+		d3dBlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 		// 파이프라인 스테이트를 생성
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -369,7 +405,10 @@ void DirectXProgram::BuildLevel()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 
-		ThrowIfFailed(m_pd3dDevice->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), (void**)m_pd3dPipelineState.GetAddressOf()));
+		ThrowIfFailed(m_pd3dDevice->CreateGraphicsPipelineState(
+			&psoDesc, 
+			__uuidof(ID3D12PipelineState), 
+			(void**)m_pd3dPipelineState.GetAddressOf()));
 	}
 
 
@@ -384,7 +423,14 @@ void DirectXProgram::BuildLevel()
 
 		const UINT vertexBufferSize = sizeof(triangleVertices);
 
-		m_pd3dPosColBuffer = CreateBufferResource(m_pd3dDevice.Get(), m_pd3dCommandList.Get(), triangleVertices, sizeof(Vertex) * 3, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPosColUploadBuffer);
+		m_pd3dPosColBuffer = CreateBufferResource(
+			m_pd3dDevice.Get(), 
+			m_pd3dCommandList.Get(), 
+			triangleVertices, 
+			sizeof(Vertex) * 3, 
+			D3D12_HEAP_TYPE_DEFAULT, 
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
+			&m_pd3dPosColUploadBuffer);
 
 		m_pd3dVertexBufferView.BufferLocation = m_pd3dPosColBuffer->GetGPUVirtualAddress();
 		m_pd3dVertexBufferView.StrideInBytes = sizeof(Vertex);
@@ -418,23 +464,46 @@ void DirectXProgram::RenderLevel()
 	m_pd3dCommandList->RSSetViewports(1, &m_Viewport);
 	m_pd3dCommandList->RSSetScissorRects(1, &m_ScissorRect);
 
-	SynchronizeResourceTransition(m_pd3dCommandList.Get(), m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	SynchronizeResourceTransition(
+		m_pd3dCommandList.Get(), 
+		m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(), 
+		D3D12_RESOURCE_STATE_PRESENT, 
+		D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	const float clear_color_with_alpha[4] = { 0.f, 0.f, 0.f, 0.f };
 
 	// 렌더타겟과 깊이스텐실뷰를 초기화
-	m_pd3dCommandList->ClearRenderTargetView(m_pd3dSwapRTVCPUHandles[m_nSwapChainBufferIndex], clear_color_with_alpha, 0, NULL);
-	m_pd3dCommandList->ClearDepthStencilView(m_d3dDsvDescriptorCPUHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+	m_pd3dCommandList->ClearRenderTargetView(
+		m_pd3dSwapRTVCPUHandles[m_nSwapChainBufferIndex], 
+		clear_color_with_alpha, 
+		0, 
+		NULL);
+
+	m_pd3dCommandList->ClearDepthStencilView(
+		m_d3dDsvDescriptorCPUHandle, 
+		D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 
+		1.0f, 
+		0, 
+		0, 
+		NULL);
 
 	// 렌더링할 렌더타겟을 출력병합기에 설정
-	m_pd3dCommandList->OMSetRenderTargets(1, &m_pd3dSwapRTVCPUHandles[m_nSwapChainBufferIndex], FALSE, &m_d3dDsvDescriptorCPUHandle);
+	m_pd3dCommandList->OMSetRenderTargets(
+		1, 
+		&m_pd3dSwapRTVCPUHandles[m_nSwapChainBufferIndex], 
+		FALSE, 
+		&m_d3dDsvDescriptorCPUHandle);
 
 	// 그릴 삼각형의 PrimitiveTopology를 설정, VertexBufferView를 연결해 삼각형을 렌더링
 	m_pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_pd3dCommandList->IASetVertexBuffers(0, 1, &m_pd3dVertexBufferView);
 	m_pd3dCommandList->DrawInstanced(3, 1, 0, 0);
 
-	SynchronizeResourceTransition(m_pd3dCommandList.Get(), m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	SynchronizeResourceTransition(
+		m_pd3dCommandList.Get(), 
+		m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(), 
+		D3D12_RESOURCE_STATE_RENDER_TARGET, 
+		D3D12_RESOURCE_STATE_PRESENT);
 
 	// 명령 리스트를 닫힌 상태로 만든다. 
 	ThrowIfFailed(m_pd3dCommandList->Close());
