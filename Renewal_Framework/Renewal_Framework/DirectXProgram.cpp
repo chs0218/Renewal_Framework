@@ -455,11 +455,10 @@ void DirectXProgram::RenderLevel()
 	m_pd3dCommandList->RSSetViewports(1, &m_Viewport);
 	m_pd3dCommandList->RSSetScissorRects(1, &m_ScissorRect);
 
-	SynchronizeResourceTransition(
-		m_pd3dCommandList.Get(), 
-		m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(), 
-		D3D12_RESOURCE_STATE_PRESENT, 
-		D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_pd3dCommandList->ResourceBarrier(1,
+		&CD3DX12_RESOURCE_BARRIER::Transition(m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(),
+			D3D12_RESOURCE_STATE_PRESENT,
+			D3D12_RESOURCE_STATE_RENDER_TARGET));
 
 	const float clear_color_with_alpha[4] = { 0.f, 0.f, 0.f, 0.f };
 
@@ -490,11 +489,10 @@ void DirectXProgram::RenderLevel()
 	m_pd3dCommandList->IASetVertexBuffers(0, 1, &m_pd3dVertexBufferView);
 	m_pd3dCommandList->DrawInstanced(3, 1, 0, 0);
 
-	SynchronizeResourceTransition(
-		m_pd3dCommandList.Get(), 
-		m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(), 
-		D3D12_RESOURCE_STATE_RENDER_TARGET, 
-		D3D12_RESOURCE_STATE_PRESENT);
+	m_pd3dCommandList->ResourceBarrier(1,
+		&CD3DX12_RESOURCE_BARRIER::Transition(m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PRESENT));
 
 	// 명령 리스트를 닫힌 상태로 만든다. 
 	ThrowIfFailed(m_pd3dCommandList->Close());
