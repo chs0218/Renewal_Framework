@@ -331,7 +331,7 @@ void DirectXProgram::BuildLevel()
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, 
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 
-			{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12,
+			{ "UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
@@ -405,28 +405,32 @@ void DirectXProgram::BuildLevel()
 
 
 	{
-		//렌더링에 사용할 삼각형의 정점 위치와 색상을 정의, 버퍼를 생성해 VertexBufferView로 저장
-		Vertex triangleVertices[] =
+		//렌더링에 사용할 사각형의 정점 위치와 색상을 정의, 버퍼를 생성해 VertexBufferView로 저장
+		Vertex rectangleVertices[] =
 		{
-			{ { 0.0f, 0.25f * m_AspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ { 0.25f, -0.25f * m_AspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-			{ { -0.25f, -0.25f * m_AspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+			{ { 0.25f, 0.25f * m_AspectRatio, 0.0f }, { 1.0f, 0.0f } },
+			{ { 0.25f, -0.25f * m_AspectRatio, 0.0f },  {  1.0f, 1.0f } },
+			{ { -0.25f, -0.25f * m_AspectRatio, 0.0f },  {  0.0f, 1.0f } },
+
+			{ { -0.25f, -0.25f * m_AspectRatio, 0.0f },  {  0.0f, 1.0f } },
+			{ { -0.25f, 0.25f * m_AspectRatio, 0.0f }, {  0.0f, 0.0f } },
+			{ { 0.25f, 0.25f * m_AspectRatio, 0.0f },  {  1.0f, 0.0f } }
 		};
 
-		const UINT vertexBufferSize = sizeof(triangleVertices);
+		const UINT vertexBufferSize = sizeof(rectangleVertices);
 
 		m_pd3dPosColBuffer = CreateBufferResource(
 			m_pd3dDevice.Get(), 
 			m_pd3dCommandList.Get(), 
-			triangleVertices, 
-			sizeof(Vertex) * 3, 
+			rectangleVertices,
+			sizeof(Vertex) * 6, 
 			D3D12_HEAP_TYPE_DEFAULT, 
 			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
 			&m_pd3dPosColUploadBuffer);
 
 		m_pd3dVertexBufferView.BufferLocation = m_pd3dPosColBuffer->GetGPUVirtualAddress();
 		m_pd3dVertexBufferView.StrideInBytes = sizeof(Vertex);
-		m_pd3dVertexBufferView.SizeInBytes = sizeof(Vertex) * 3;
+		m_pd3dVertexBufferView.SizeInBytes = sizeof(Vertex) * 6;
 	}
 
 	//레벨에 사용될 객체를 생성하기 위하여 필요한 그래픽 명령 리스트들을 명령 큐에 추가한다. 
@@ -487,7 +491,7 @@ void DirectXProgram::RenderLevel()
 	// 그릴 삼각형의 PrimitiveTopology를 설정, VertexBufferView를 연결해 삼각형을 렌더링
 	m_pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_pd3dCommandList->IASetVertexBuffers(0, 1, &m_pd3dVertexBufferView);
-	m_pd3dCommandList->DrawInstanced(3, 1, 0, 0);
+	m_pd3dCommandList->DrawInstanced(6, 1, 0, 0);
 
 	m_pd3dCommandList->ResourceBarrier(1,
 		&CD3DX12_RESOURCE_BARRIER::Transition(m_ppd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(),
